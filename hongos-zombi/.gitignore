@@ -1,0 +1,12 @@
+node_modules/
+__pycache__/
+.venv/
+.hyperframes/
+check.json
+assets/*.wav
+assets/gsap.min.js
+assets/config.json
+assets/settings.js
+assets/timing.json
+assets/words.json
+assets/subtitles.srt

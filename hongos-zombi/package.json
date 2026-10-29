@@ -1,0 +1,11 @@
+{
+  "name": "hongos-zombi", "private": true, "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "hyperframes check --json",
+    "preview": "hyperframes preview",
+    "render": "hyperframes render --fps 30 --quality delivery --output ../output/hongos-zombi.mp4",
+    "verify": "node scripts/verify.mjs ../output/hongos-zombi.mp4"
+  },
+  "devDependencies": { "hyperframes": "0.8.216", "gsap": "3.14.2" }
+}

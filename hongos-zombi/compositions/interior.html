@@ -1,0 +1,13 @@
+<template>
+ <style>#root{position:absolute;inset:0} #interior-canvas{position:absolute;inset:0;width:720px;height:1280px} .heading{position:absolute;left:74px;top:162px;width:572px;color:#edf5ed;font:700 42px/1.05 Arial;letter-spacing:-1px;margin:0} .kicker{position:absolute;left:74px;top:125px;color:#ffbd54;font:700 21px Arial;letter-spacing:3px}</style>
+ <div data-hf-id="hf-vliq" id="root" data-composition-id="interior" data-width="720" data-height="1280">
+ <canvas data-hf-id="hf-2dux" id="interior-canvas" width="720" height="1280" data-layout-ignore></canvas>
+ <div data-hf-id="hf-owby" class="kicker">HONGOS ZOMBI · 3/7</div>
+ <h1 data-hf-id="hf-stzi" class="heading" data-var-text="heading">INVASIÓN INTERIOR</h1>
+ </div>
+ <script>
+ (()=>{const c=document.getElementById('interior-canvas');const state={time:0};const scene={"id":"interior"};
+ const paint=()=>window.Hongos.draw(c,scene,state.time);paint();
+ const tl=gsap.timeline({paused:true});tl.to(state,{time:8,duration:8,ease:'none',onUpdate:paint},0);
+ window.__timelines=window.__timelines||{};window.__timelines['interior']=tl;})();
+ </script></template>

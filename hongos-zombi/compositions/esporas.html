@@ -1,0 +1,13 @@
+<template>
+ <style>#root{position:absolute;inset:0} #esporas-canvas{position:absolute;inset:0;width:720px;height:1280px} .heading{position:absolute;left:74px;top:162px;width:572px;color:#edf5ed;font:700 42px/1.05 Arial;letter-spacing:-1px;margin:0} .kicker{position:absolute;left:74px;top:125px;color:#ffbd54;font:700 21px Arial;letter-spacing:3px}</style>
+ <div data-hf-id="hf-0szz" id="root" data-composition-id="esporas" data-width="720" data-height="1280">
+ <canvas data-hf-id="hf-j0hk" id="esporas-canvas" width="720" height="1280" data-layout-ignore></canvas>
+ <div data-hf-id="hf-bx49" class="kicker">HONGOS ZOMBI · 2/7</div>
+ <h1 data-hf-id="hf-r80h" class="heading" data-var-text="heading">LA INFECCIÓN EMPIEZA</h1>
+ </div>
+ <script>
+ (()=>{const c=document.getElementById('esporas-canvas');const state={time:0};const scene={"id":"esporas"};
+ const paint=()=>window.Hongos.draw(c,scene,state.time);paint();
+ const tl=gsap.timeline({paused:true});tl.to(state,{time:6,duration:6,ease:'none',onUpdate:paint},0);
+ window.__timelines=window.__timelines||{};window.__timelines['esporas']=tl;})();
+ </script></template>
