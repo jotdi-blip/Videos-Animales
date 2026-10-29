@@ -1,0 +1,13 @@
+<template>
+ <style>#root{position:absolute;inset:0} #cerebro-canvas{position:absolute;inset:0;width:720px;height:1280px} .heading{position:absolute;left:74px;top:162px;width:572px;color:#edf5ed;font:700 42px/1.05 Arial;letter-spacing:-1px;margin:0} .kicker{position:absolute;left:74px;top:125px;color:#ffbd54;font:700 21px Arial;letter-spacing:3px}</style>
+ <div data-hf-id="hf-ir3q" id="root" data-composition-id="cerebro" data-width="720" data-height="1280">
+ <canvas data-hf-id="hf-60hf" id="cerebro-canvas" width="720" height="1280" data-layout-ignore></canvas>
+ <div data-hf-id="hf-fx2z" class="kicker">HONGOS ZOMBI · 4/7</div>
+ <h1 data-hf-id="hf-tmq5" class="heading" data-var-text="heading">EL CEREBRO SIGUE AHÍ</h1>
+ </div>
+ <script>
+ (()=>{const c=document.getElementById('cerebro-canvas');const state={time:0};const scene={"id":"cerebro"};
+ const paint=()=>window.Hongos.draw(c,scene,state.time);paint();
+ const tl=gsap.timeline({paused:true});tl.to(state,{time:9,duration:9,ease:'none',onUpdate:paint},0);
+ window.__timelines=window.__timelines||{};window.__timelines['cerebro']=tl;})();
+ </script></template>

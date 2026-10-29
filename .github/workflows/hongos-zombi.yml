@@ -1,0 +1,66 @@
+name: Render hongos zombi
+on:
+  workflow_dispatch:
+  pull_request:
+    paths: ['hongos-zombi/**', '.github/workflows/hongos-zombi.yml']
+  push:
+    branches: [main]
+    paths: ['hongos-zombi/**', '.github/workflows/hongos-zombi.yml']
+permissions:
+  contents: read
+concurrency:
+  group: hongos-zombi-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: hongos-zombi
+    env:
+      HYPERFRAMES_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: hongos-zombi/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install FFmpeg
+        run: sudo apt-get update -qq && sudo apt-get install -y ffmpeg
+      - name: Install pinned dependencies
+        run: |
+          npm ci
+          python -m pip install -r requirements.txt
+          npx hyperframes browser ensure
+      - name: Build scenes, Spanish voice, word captions and ambient score
+        run: npm run build
+      - name: Check composition
+        run: npm run check > check.json
+      - name: Review scene frames
+        run: npx hyperframes snapshot --review
+      - name: Render MP4
+        run: npm run render
+      - name: Verify deliverable
+        run: npm run verify
+      - name: Upload MP4 and subtitles
+        uses: actions/upload-artifact@v4
+        with:
+          name: hongos-zombi-720x1280-30fps
+          path: |
+            output/hongos-zombi.mp4
+            hongos-zombi/assets/subtitles.srt
+            hongos-zombi/assets/words.json
+          if-no-files-found: error
+      - name: Upload diagnostics and preview frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hongos-zombi-review
+          path: |
+            hongos-zombi/check.json
+            hongos-zombi/.hyperframes/artifacts/snapshots/
