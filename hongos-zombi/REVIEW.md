@@ -9,3 +9,5 @@ La advertencia de 80 clips en la pista de subtítulos se conserva intencionadame
 La locución usa eSpeak NG en español y suena sintética; es el compromiso de la ruta local, sin claves ni modelos descargados desde proveedores externos. La música es un pad original de amplitud baja. El audio se verifica por presencia, niveles y duración; no se ha realizado escucha humana. La sincronización por palabra procede del motor de síntesis, no de una transcripción estimada.
 
 La toma más esquemática es la mordida: una hormiga de contornos sujeta la cara inferior de una hoja y permanece inmóvil mientras emerge el tallo. Una producción de más detalle podría mostrar la articulación de las mandíbulas en macro. Los modelos ilustran el hallazgo científico; no son una simulación biológica ni anatomía a escala.
+
+MP4 local verificado con ffprobe y cuadros decodificados: H.264/AAC, 720×1280, 30/1 fps, 1380 cuadros, 46.0 s, 10.5 MB. Se marcó también el host de captions con data-no-timeline para evitar la espera de registro en la captura; los subtítulos son clips estáticos temporizados.
