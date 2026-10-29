@@ -1,0 +1,19 @@
+{
+  "name": "tortugas-ciencia-3d",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs",
+    "check": "node render.mjs --check"
+  },
+  "dependencies": {
+    "@fontsource/barlow-condensed": "5.2.8",
+    "pngjs": "7.0.0",
+    "puppeteer": "24.25.0",
+    "three": "0.180.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
