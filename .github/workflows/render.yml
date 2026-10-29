@@ -1,0 +1,51 @@
+name: Render científico 3D
+on:
+  push:
+    branches: [main]
+    paths-ignore: ['output/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: render-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Instalar ffmpeg y dependencias del navegador
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm ci
+          npx puppeteer browsers install chrome --install-deps
+      - name: Renderizar y verificar
+        run: |
+          node render.mjs --check
+          node render.mjs
+      - name: Guardar respaldo MP4
+        uses: actions/upload-artifact@v4
+        with:
+          name: tortugas-mp4
+          path: output/tortugas.mp4
+          if-no-files-found: error
+          retention-days: 30
+      - name: Commit automático del video
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add output/tortugas.mp4
+          if ! git diff --cached --quiet; then
+            git commit -m 'Renderiza video de tortugas [skip ci]'
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
