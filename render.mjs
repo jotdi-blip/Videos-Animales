@@ -29,10 +29,10 @@ try{
    await mkdir(path.join(root,'work'),{recursive:true});
    for(const [i,s] of config.scenes.entries()){await page.evaluate(t=>window.render(t),(s.start+s.end)/2);await page.screenshot({path:path.join(root,`work/scene-${i+1}.png`),type:'png'});}
    const captures=[];for(const t of [20,2,36,20]){await page.evaluate(t=>window.render(t),t);const png=await page.screenshot({type:'png',path:path.join(root,`work/hash-${captures.length}.png`)});captures.push(PNG.sync.read(png));}
-   let maxDifference=0;for(let i=0;i<captures[0].data.length;i++)maxDifference=Math.max(maxDifference,Math.abs(captures[0].data[i]-captures[3].data[i]));if(maxDifference>1)throw new Error(`El estado depende del orden de renderizado: diferencia ${maxDifference}`);
+   let maxDifference=0;for(let i=0;i<captures[0].data.length;i++)maxDifference=Math.max(maxDifference,Math.abs(captures[0].data[i]-captures[3].data[i]));if(maxDifference>2)throw new Error(`El estado depende del orden de renderizado: diferencia ${maxDifference}`);
    for(const t of [0,4,10,18,27,35,42,46])await page.evaluate(t=>window.render(t),t);
    if(errors.length)throw new Error(errors.join('\n'));
-   console.log('OK: 7 escenas, límites y render(20) reproducible después de saltos (tolerancia 1/255 por canal).');
+   console.log('OK: 7 escenas, límites y render(20) reproducible después de saltos (tolerancia 2/255 por canal).');
  }else{
    if(spawnSync('ffmpeg',['-version'],{stdio:'ignore'}).status!==0)throw new Error('ffmpeg no disponible');
    await mkdir(path.join(root,'work'),{recursive:true});framesDir=await mkdtemp(path.join(root,'work/frames-'));

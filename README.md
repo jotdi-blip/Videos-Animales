@@ -14,7 +14,7 @@ Para Full HD, cambia `video.width` a `1080` y `video.height` a `1920`; el HUD es
 
 ## Uso local opcional
 
-Requiere Node 22+, Chrome de Puppeteer y ffmpeg. `npm ci`, `node render.mjs --check` y `node render.mjs`. Si ya tienes Chromium: `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium node render.mjs`. También admite `WIDTH=1080 HEIGHT=1920`. `--check` guarda siete imágenes en `work/` y comprueba que volver al mismo tiempo después de varios saltos produce los mismos píxeles con tolerancia de 1/255 por canal para el redondeo de sombras del navegador. `KEEP_FRAMES=1` conserva las capturas.
+Requiere Node 22+, Chrome de Puppeteer y ffmpeg. `npm ci`, `node render.mjs --check` y `node render.mjs`. Si ya tienes Chromium: `PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium node render.mjs`. También admite `WIDTH=1080 HEIGHT=1920`. `--check` guarda siete imágenes en `work/` y comprueba que volver al mismo tiempo después de varios saltos produce los mismos píxeles con tolerancia de 2/255 por canal para el redondeo de sombras del navegador. `KEEP_FRAMES=1` conserva las capturas.
 
 `window.render(t)` asigna el estado completo desde segundos absolutos, sin reloj, aleatoriedad ni bucle de animación. El renderizador captura PNG secuenciales y ffmpeg produce H.264 / yuv420p con faststart. Para inspeccionar el HTML, sírvelo desde la raíz (por ejemplo `python3 -m http.server 8000`) y abre `http://localhost:8000/?t=20`; las flechas permiten avanzar o retroceder un segundo.
 
