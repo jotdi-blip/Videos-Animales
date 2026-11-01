@@ -8,6 +8,6 @@ En `config.js`, cambia `scenes[].duration` (segundos) y `colors` (colores hexade
 
 Desarrollo opcional con Node 22+: `npm ci`, `npx puppeteer browsers install chrome --install-deps`, `npm run render`, `npm run verify`. ffmpeg debe estar disponible. `PUPPETEER_EXECUTABLE_PATH` permite usar un Chromium instalado; el script también detecta `/usr/bin/chromium`.
 
-`npm run review` genera 25 PNG de los ocho episodios, incluidos primeros planos, en `output/review/`, comprueba escenas no vacías y compara hashes tras buscar tiempos en orden inverso. `npm run render` hace estas comprobaciones antes de capturar los 1980 cuadros PNG y pasarlos por pipe a ffmpeg. `npm run verify` confirma resolución, duración, frecuencia, cuadros y ausencia de otras pistas.
+`npm run review` genera 26 PNG de los ocho episodios, incluidos primeros planos, en `output/review/`, comprueba escenas no vacías y compara hashes tras buscar tiempos en orden inverso. `npm run render` hace estas comprobaciones antes de capturar los 1980 cuadros PNG y pasarlos por pipe a ffmpeg. `npm run verify` confirma resolución, duración, frecuencia, cuadros y ausencia de otras pistas.
 
 La anatomía y la leyenda están estilizadas como un diorama narrativo: la bolsa es un corte esquemático con trece puntos de lactancia y crías ampliadas en el plano macro; el veneno se representa con gotas verdes y partículas azules. Las escenas de peligro no son gráficas.

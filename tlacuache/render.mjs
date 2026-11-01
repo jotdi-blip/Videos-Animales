@@ -52,7 +52,7 @@ try {
   return Buffer.from(await page.screenshot({type:'png',optimizeForSpeed:true}));
  };
  // Compare hashes after deliberately seeking backwards and across scene changes.
- const seekTimes=[.6,4,11.5,20.4,28.1,37.5,46.8,53.4,63.2];
+ const seekTimes=[.6,4,11.5,20.4,28.1,37.5,46.8,53.4,56.5,63.2];
  const hashes=new Map();
  for(const t of seekTimes)hashes.set(t,createHash('sha256').update(await getFrame(t)).digest('hex'));
  for(const t of seekTimes.toReversed()){
@@ -82,7 +82,7 @@ try {
  if(!reviewOnly){
   const frames=Math.round(DURATION*CONFIG.fps);
   if(Math.abs(frames/CONFIG.fps-DURATION)>1e-8)throw new Error('Scene durations must total a whole number of frames.');
-  const tmp=resolve(out,'tlacuache.tmp.mp4');
+  const tmp=resolve(out,`tlacuache.${process.pid}.tmp.mp4`);
   encoder=spawn('ffmpeg',['-hide_banner','-loglevel','warning','-y',
    '-f','image2pipe','-framerate',String(CONFIG.fps),'-vcodec','png','-i','pipe:0',
    '-map','0:v:0','-an','-sn','-c:v','libx264','-preset','fast','-crf','19',

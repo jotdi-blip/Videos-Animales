@@ -10,7 +10,7 @@ export const CONFIG = {
     { id: 'bolsa', duration: 8, review: [1.4, 4.0, 7.0] },
     { id: 'arbol', duration: 8, review: [1.5, 4.2, 7.0] },
     { id: 'patio', duration: 8, review: [1.0, 3.8, 7.0] },
-    { id: 'fuego', duration: 10, review: [1.7, 5.3, 7.4, 9.5] }
+    { id: 'fuego', duration: 10, review: [.5, 1.7, 5.3, 7.4, 9.5] }
   ],
   colors: {
     sky: '#101e40', soil: '#86513f', soilDark: '#633e38',
