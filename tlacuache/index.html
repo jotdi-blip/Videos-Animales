@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tlacuache</title>
+<style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#101e40}canvas{display:block;width:100%;height:100%}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+<body>
+<script type="module">
+import * as THREE from 'three';
+import { CONFIG, DURATION, sceneAt } from './config.js';
+const C = CONFIG.colors;
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+renderer.setSize(CONFIG.width, CONFIG.height);
+renderer.setPixelRatio(1);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.24;
+document.body.appendChild(renderer.domElement);
+const camera = new THREE.PerspectiveCamera(36, CONFIG.width / CONFIG.height, .1, 90);
+const clamp = (x, a=0, b=1) => Math.max(a, Math.min(b, x));
+const smooth = (a,b,x) => { const u=clamp((x-a)/(b-a)); return u*u*(3-2*u); };
+const mix = THREE.MathUtils.lerp;
+const V = (x,y,z) => new THREE.Vector3(x,y,z);
+const materials = new Map();
+function mat(color, emissive=false) {
+  const key=color+emissive;
+  if (!materials.has(key)) materials.set(key,new THREE.MeshStandardMaterial({color, flatShading:true, roughness:.85, metalness:0, emissive:emissive?color:0, emissiveIntensity:emissive?.6:0}));
+  return materials.get(key);
+}
+const sphereGeo=new THREE.SphereGeometry(1,12,8);
+const boxGeo=new THREE.BoxGeometry(1,1,1);
+function mesh(parent,geo,color,p=[0,0,0],scale=[1,1,1],glow=false) {
+  const o=new THREE.Mesh(geo,mat(color,glow)); o.position.set(...p); o.scale.set(...scale); parent.add(o); return o;
+}
+const ball=(p,c,pos,s=[1,1,1],glow=false)=>mesh(p,sphereGeo,c,pos,s,glow);
+const box=(p,c,pos,s)=>mesh(p,boxGeo,c,pos,s);
+function cone(p,c,pos,r,h,n=8) { return mesh(p,new THREE.ConeGeometry(r,h,n),c,pos); }
+function cyl(p,c,pos,r,h,n=10) { return mesh(p,new THREE.CylinderGeometry(r,r,h,n),c,pos); }
+function group(parent,pos=[0,0,0]) { const g=new THREE.Group();g.position.set(...pos);if(parent)parent.add(g);return g; }
+function rod(parent,a,b,r,color) {
+  const av=V(...a),bv=V(...b),d=bv.clone().sub(av);
+  const o=cyl(parent,color,av.clone().add(bv).multiplyScalar(.5).toArray(),r,d.length(),8);
+  o.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());return o;
+}
+function chain(parent,points,r,color) {
+  const g=group(parent);const pieces=[];
+  for(let i=0;i<points.length-1;i++) pieces.push(rod(g,points[i],points[i+1],r*(1-i/(points.length*1.5)),color));
+  return g;
+}
+function fade(g,a) {
+  g.visible=a>.005;
+  g.traverse(o=>{if(o.isMesh){if(!o.userData.fadeMaterial){o.material=o.material.clone();o.userData.fadeMaterial=true;}o.material.transparent=true;o.material.opacity=a;o.material.depthWrite=a>.98;}});
+}
+function aim(pos,target) {camera.position.set(...pos);camera.lookAt(...target);camera.updateMatrixWorld();}
+function lightScene(legend=false) {
+  const s=new THREE.Scene();s.background=new THREE.Color(legend?C.legendSky:C.sky);
+  s.add(new THREE.HemisphereLight(legend?'#ffd4a0':'#b9d5ff',legend?'#704439':'#625564',2.1));
+  const key=new THREE.DirectionalLight('#ffddad',3.2);key.position.set(-3,7,5);s.add(key);
+  const rim=new THREE.DirectionalLight(legend?'#ff9a49':'#8faef5',2);rim.position.set(4,4,-5);s.add(rim);
+  return s;
+}
+function plant(p,x,z,scale=1) {
+  const g=group(p,[x,0,z]);g.scale.setScalar(scale);
+  cyl(g,'#bd705b',[0,.2,0],.23,.4,8);
+  for(let i=0;i<5;i++){const a=i*2.4;rod(g,[0,.34,0],[Math.cos(a)*.27,.65+i*.075,Math.sin(a)*.23],.06,C.plant);const l=ball(g,i%2?C.plant:C.grassEdge,[Math.cos(a)*.28,.66+i*.075,Math.sin(a)*.25],[.11,.28,.08]);l.rotation.z=Math.cos(a)*.6;}
+}
+function lamp(p,x,z) {
+  cyl(p,'#52525b',[x,1.3,z],.055,2.6);cyl(p,'#52525b',[x,.1,z],.15,.2);
+  box(p,'#52525b',[x,2.67,z],[.45,.08,.4]);
+  box(p,C.yellow,[x,2.44,z],[.28,.36,.25]).material=mat(C.yellow,true);
+  for(let dx of [-.17,.17])for(let dz of [-.14,.14])rod(p,[x+dx,2.24,z+dz],[x+dx,2.65,z+dz],.025,'#52525b');
+  cone(p,'#52525b',[x,2.82,z],.34,.28,4).rotation.y=Math.PI/4;
+  const l=new THREE.PointLight(C.yellow,13,7,2);l.position.set(x,2.3,z);p.add(l);
+  const pool=cyl(p,C.yellow,[x,.012,z],.8,.015,24);pool.material=new THREE.MeshBasicMaterial({color:C.yellow,transparent:true,opacity:.09,depthWrite:false});
+}
+function environment({wall=false,tree=false,legend=false,plain=false}={}) {
+  const s=lightScene(legend);const g=group(s);
+  const earth=cyl(g,legend?C.legendGround:C.soil,[0,-.42,0],3.25,.82,10);earth.scale.z=.83;
+  const seam=cyl(g,C.soilDark,[0,-.67,0],3.255,.09,10);seam.scale.z=.83;
+  const top=cyl(g,legend?C.legendGround:C.grass,[0,-.025,0],3.28,.12,10);top.scale.z=.83;
+  for(let i=0;i<24;i++){const a=i*2.399;ball(g,i%3?C.soilDark:C.wallCap,[Math.cos(a)*3.17,-.24-(i%3)*.16,Math.sin(a)*2.62],[.055,.038,.03]);}
+  if(!legend&&!plain){
+    box(g,C.paving,[0,.018,.35],[4.8,.06,2.8]);
+    for(let i=0;i<6;i++)for(let j=0;j<3;j++){box(g,'#c29f84',[-2+i*.8,.052,-.65+j*.8],[.012,.005,.78]);box(g,'#c29f84',[-1.6+i*.8,.052,-1.05+j*.8],[.78,.005,.012]);}
+    for(let i=0;i<3;i++){
+      const x=-2.05+i*2.04, h=1.75+(i%2)*.55;
+      box(g,[C.teal,'#d88e83','#d7b46e'][i],[x,h/2,-2.02],[1.9,h,1.05]);
+      box(g,C.wallCap,[x,h+.05,-2.02],[2.04,.16,1.2]);
+      box(g,'#754e55',[x-.27,.49,-1.48],[.49,.98,.045]);
+      box(g,C.yellow,[x+.48,1.14,-1.47],[.43,.45,.05]).material=mat(C.yellow,true);
+      box(g,C.soilDark,[x+.48,1.14,-1.42],[.04,.5,.045]);
+      box(g,C.soilDark,[x+.48,1.14,-1.42],[.46,.04,.045]);
+    }
+    lamp(g,-2.55,-.65);plant(g,2.55,-.7,.95);plant(g,-2.5,1.05,.8);
+    for(let i=0;i<9;i++){const x=-2.8+i*.67;const o=cone(g,C.grassEdge,[x,.12,2.22],.12,.25,5);o.rotation.z=.2*Math.sin(i);}
+  }
+  if(!legend){
+    ball(g,'#f9e8b5',[-2.6,5.6,-6],[.43,.43,.3],true);
+    for(let i=0;i<27;i++){const x=Math.sin(i*9.2)*6.3,y=3.9+((i*7)%13)*.23;ball(g,'#e1e9fa',[x,y,-7-(i%3)],Array(3).fill(.017+(i%3)*.008),true);}
+  }
+  if(wall){
+    box(g,C.wall,[0,.48,.15],[5.65,.96,.73]);box(g,C.wallCap,[0,1.01,.15],[5.83,.15,.88]);
+    for(let i=0;i<8;i++){box(g,'#c58477',[-2.5+i*.73,.49,.522],[.02,.83,.012]);box(g,'#c58477',[-2.5+i*.73,.46,.527],[.69,.025,.012]);}
+  }
+  let tr;
+  if(tree)tr=makeTree(g);
+  return {s,g,tree:tr};
+}
+function makeTree(p) {
+  const g=group(p,[.7,0,-.55]);
+  cyl(g,'#805742',[0,1.85,0],.43,3.7,9);
+  for(let i=0;i<5;i++){const a=i*1.3;rod(g,[0,.25,0],[Math.cos(a)*.8,.05,Math.sin(a)*.65],.13,'#805742');}
+  rod(g,[0,2.0,0],[-1.35,2.8,.1],.18,'#805742');
+  rod(g,[0,2.55,0],[1.4,3.32,0],.16,'#805742');
+  ball(g,'#3f302b',[.14,2.9,.414],[.24,.36,.025]);
+  for(let i=0;i<8;i++){const a=i*2.4;ball(g,i%2?C.plant:C.grassEdge,[Math.cos(a)*1.02,3.9+Math.sin(i*2)*.4,Math.sin(a)*.72],[.95,.85,.85]);}
+  return g;
+}
+function opossum(parent,scale=1) {
+  const root=group(parent);root.scale.setScalar(scale);const body=group(root);
+  ball(body,C.fur,[0,.79,0],[.83,.52,.47]);
+  ball(body,'#d3d7d7',[.35,.73,0],[.58,.42,.44]);
+  const head=group(body,[.59,1.04,0]);
+  ball(head,C.face,[.08,.08,0],[.47,.4,.37]);
+  const muzzle=cone(head,C.face,[.54,-.015,0],.28,.72,10);muzzle.rotation.z=-Math.PI/2;
+  ball(head,C.nose,[.905,-.015,0],[.105,.075,.105]);
+  const eyes=[];
+  for(const side of [-1,1]){
+    ball(head,C.ear,[-.1,.43,side*.29],[.23,.25,.1]);
+    ball(head,'#ba7f8c',[-.09,.44,side*.361],[.13,.15,.022]);
+    const eye=group(head,[.29,.21,side*.302]);ball(eye,C.eye,[0,0,0],[.139,.155,.087]);
+    ball(eye,'#ffffff',[.035,.055,side*.07],[.035,.041,.022],true);eyes.push(eye);
+    for(let k=0;k<3;k++)rod(head,[.68,-.02,side*.16],[.88+(k-1)*.12,-.04+k*.06,side*.43],.007,'#bbb1a9');
+  }
+  const mouth=group(head,[.55,-.1,0]);
+  ball(mouth,'#452b42',[0,0,0],[.33,.18,.25]);
+  ball(mouth,'#ed9fac',[.06,-.1,0],[.18,.03,.16]);
+  for(const side of [-1,1])for(let i=0;i<9;i++){
+    const x=-.25+i*.061;
+    const upper=cone(mouth,C.face,[x,.105,side*(.19-.04*Math.abs(x))],.024,.09,5);upper.rotation.z=Math.PI;
+    cone(mouth,C.face,[x,-.105,side*(.19-.04*Math.abs(x))],.023,.085,5);
+  }
+  const lower=ball(mouth,C.face,[0,-.19,0],[.34,.065,.25]);
+  mouth.visible=false;
+  const legs=[];
+  for(const x of [-.49,.45])for(const z of [-.31,.31]){
+    const leg=group(body,[x,.64,z]);
+    ball(leg,C.fur,[0,-.19,0],[.17,.33,.16]);
+    ball(leg,C.tail,[.07,-.56,.015],[.19,.075,.16]);
+    for(let k=0;k<4;k++)ball(leg,C.tail,[.19,-.57,-.085+k*.065],[.095,.035,.025]);
+    legs.push(leg);
+  }
+  const tail=group(body,[-.67,.73,0]);const tailParts=[];
+  for(let i=0;i<16;i++)tailParts.push(cyl(tail,C.tail,[0,0,0],.073*(1-i/21),.15,7));
+  function tailPose(mode=0,t=0){
+    const pts=[];
+    for(let i=0;i<=16;i++){
+      const u=i/16;
+      if(mode===1)pts.push(V(-u*1.38, -.3*u+Math.sin(u*5.5)*.21, Math.sin(u*5.5)*.29));
+      else if(mode===2)pts.push(V(-u*1.3,Math.sin(u*5)*.4,(Math.cos(u*5)-1)*.36));
+      else pts.push(V(-u*1.55,-.42*Math.sin(u*1.5),Math.sin(u*3+t*2)*.17*u));
+    }
+    tailParts.forEach((o,i)=>{o.position.copy(pts[i]).add(pts[i+1]).multiplyScalar(.5);const d=pts[i+1].clone().sub(pts[i]);o.scale.y=d.length()/.15;o.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());});
+    return pts[16].clone().add(tail.position);
+  }
+  function pose(t,{walk=0,open=0,look=0,dead=0,tailMode=0}={}) {
+    const bounce=Math.abs(Math.sin(t*7))*walk*.045;
+    body.position.y=bounce;body.scale.set(1,1+Math.sin(t*5)*.018*(1-dead),1);
+    legs.forEach((o,i)=>o.rotation.z=Math.sin(t*7+(i===0||i===3?0:Math.PI))*.42*walk);
+    head.rotation.set(0,look,dead?-.07:Math.sin(t*2)*.045);
+    eyes.forEach(o=>o.scale.y=dead?.22:open>.1?1:1-.9*Math.pow(Math.max(0,Math.sin(t*1.31)),32));
+    mouth.visible=open>.01;mouth.scale.y=.35+open*.8;
+    tailPose(tailMode,t);
+  }
+  pose(0);return {root,body,head,eyes,mouth,legs,tail,tailParts,pose,tailPose};
+}
+function baby(parent,scale=.15) {
+  const r=group(parent);r.scale.setScalar(scale);
+  ball(r,C.tail,[0,.18,0],[.45,.21,.23]);ball(r,'#ffd0c1',[.35,.22,0],[.23,.21,.2]);
+  for(const z of [-.15,.15])ball(r,C.eye,[.44,.29,z],[.035,.04,.025]);
+  for(const x of [-.22,.22])for(const z of [-.17,.17])ball(r,'#ffd0c1',[x,.06,z],[.1,.07,.06]);
+  chain(r,[[-.4,.2,0],[-.65,.14,.1],[-.73,.07,.14]],.035,C.tail);return r;
+}
+function quadruped(parent,type='dog') {
+  const r=group(parent);const cat=type==='cat';const col=cat?'#dfb16f':'#b77c56';
+  ball(r,col,[0,.64,0],[.65,.44,.36]);
+  const h=group(r,[.5,.99,0]);ball(h,col,[0,0,0],[.39,.37,.33]);
+  ball(h,cat?'#f7d6a0':'#f0c6a0',[.28,-.11,0],[.26,.18,.24]);ball(h,'#40313b',[.48,-.08,0],[.09,.08,.11]);
+  for(const z of [-.24,.24]){
+    if(cat)cone(h,col,[-.04,.38,z],.17,.4,4);
+    else ball(h,'#704f47',[-.15,.05,z],[.18,.37,.11]);
+    ball(h,'#242735',[.19,.11,z],[.07,.1,.045]);
+  }
+  const mouth=ball(h,'#623743',[.28,-.23,.04],[.2,.1,.2]);
+  for(const x of [-.4,.38])for(const z of [-.23,.23]){ball(r,col,[x,.24,z],[.12,.3,.12]);ball(r,'#f0c6a0',[x+.06,.07,z],[.17,.08,.13]);}
+  chain(r,[[-.59,.75,0],[-.88,1.01,0],[-1,1.22,.08]],.085,col);
+  return {root:r,head:h,mouth};
+}
+function rat(parent) {
+  const g=group(parent);ball(g,'#9e91ac',[0,.25,0],[.42,.25,.24]);
+  ball(g,'#cab0ba',[.38,.28,0],[.26,.17,.18]);
+  for(const z of [-.16,.16]){ball(g,'#957e9e',[.11,.53,z],[.16,.17,.06]);ball(g,C.eye,[.38,.36,z],[.055,.06,.04]);}
+  ball(g,C.nose,[.6,.25,0],[.06,.055,.07]);
+  chain(g,[[-.34,.2,0],[-.7,.1,.13],[-.87,.04,.28]],.035,C.tail);
+  for(let x of [-.2,.23])for(let z of [-.14,.14])ball(g,C.tail,[x,.04,z],[.13,.05,.07]);return g;
+}
+function marsupial(parent,type) {
+  const g=group(parent);const roo=type==='roo', c=roo?'#c89b69':'#9faeba';
+  ball(g,c,[0,.51,0],[roo?.24:.38,.45,.29]);ball(g,c,[.07,1.04,0],[.31,.29,.26]);
+  for(let z of [-.24,.24]){
+    ball(g,c,[0,roo?1.42:1.23,z],[roo?.09:.22,roo?.29:.22,.105]);
+    ball(g,roo?'#e7c29b':'#dae0db',[.015,roo?1.43:1.23,z+.025],[roo?.045:.13,roo?.18:.13,.09]);
+    ball(g,C.eye,[.29,1.11,z*.75],[roo?.04:.065,.07,.035]);
+    ball(g,c,[.05,.12,z*.75],[.28,.11,.11]);
+    rod(g,[.03,.7,z],[.21,.51,z],.075,c);
+  }
+  ball(g,roo?'#735142':'#41414a',[.34,1.02,0],roo?[.08,.06,.09]:[.14,.18,.13]);
+  ball(g,'#e6c5a1',[.2,.47,0],[.05,.21,.2]);
+  if(roo)chain(g,[[-.15,.4,0],[-.5,.13,0],[-.78,.06,0]],.12,c);
+  return g;
+}
+function snake(parent) {
+  const g=group(parent);const sections=[];
+  for(let i=0;i<19;i++){
+    const a=i*.55;sections.push(ball(g,i%3?'#bf9b59':'#786342',[-1+Math.cos(a)*(.6-i*.018),.13+i*.007,Math.sin(a)*.42],[.17,.14,.15]));
+  }
+  const neck=group(g,[-.35,.22,.12]);
+  ball(neck,'#c9aa6b',[.2,.13,0],[.4,.14,.16]);
+  for(const z of [-.13,.13])ball(neck,C.eye,[.4,.22,z],[.038,.05,.025]);
+  const fang=cone(neck,'#fff1db',[.47,.005,.075],.028,.14,5);fang.rotation.z=Math.PI;
+  for(let i=0;i<4;i++)ball(g,'#dfc68e',[-1.6-i*.09,.17,.01],[.08,.1,.1]);return {root:g,neck};
+}
+function sparkle(parent,x,y,z) {
+  const g=group(parent,[x,y,z]);const a=box(g,'#fff1b5',[0,0,0],[.025,.27,.025]);const b=box(g,'#fff1b5',[0,0,0],[.2,.025,.025]);a.material=b.material=mat('#fff1b5',true);return g;
+}
+const scenes=[];
+// 1. A wall, a mistaken rat silhouette, then the marsupial family.
+{
+ const e=environment({wall:true}),hero=opossum(e.s),r=rat(e.s),roo=marsupial(e.s,'roo'),koala=marsupial(e.s,'koala');
+ r.position.set(1.3,1.09,.15);roo.position.set(-1.45,1.09,.1);koala.position.set(1.52,1.09,.1);
+ scenes.push({s:e.s,update(u,t){
+   const p=u*8;hero.root.position.set(mix(-.5,.3,smooth(0,3,p)),1.09,.19);hero.pose(t,{walk:p<3?1:.15,look:Math.sin(p)*.18});
+   fade(r,smooth(.2,.7,p)*(1-smooth(1.9,2.8,p)));fade(roo,smooth(2.8,3.5,p)*(1-smooth(5.7,6.3,p)));fade(koala,smooth(3.2,3.9,p)*(1-smooth(5.7,6.3,p)));
+   const q=smooth(5.6,7.8,p);aim([mix(6.6,4.8,q),mix(5.1,3.1,q),mix(12,7.1,q)],[mix(0,.75,q),mix(1.5,2.25,q),.1]);
+ }});
+}
+// 2. The bite, a toy anatomical cutaway, and an unharmed walk.
+{
+ const e=environment(),hero=opossum(e.s),sn=snake(e.s);sn.root.position.set(.7,.06,.4);sn.root.rotation.y=Math.PI;
+ const cut=lightScene();const stage=group(cut);
+ cyl(stage,C.soil,[0,-.45,0],3.1,.8,12).scale.z=.72;cyl(stage,C.grass,[0,-.04,0],3.12,.1,12).scale.z=.72;
+ const paw=group(stage,[0,.32,.38]);
+ ball(paw,C.fur,[0,.65,-.2],[2.12,1.05,.48]);
+ for(let i=0;i<4;i++)ball(paw,C.tail,[-1.17+i*.78,-.12,.02],[.28,.38,.23]);
+ box(paw,'#ffbdba',[0,.7,.17],[3.5,1.18,.47]);box(paw,C.blood,[0,.7,.43],[3.28,.78,.1]);
+ box(paw,'#ee8895',[0,1.16,.43],[3.46,.16,.14]);box(paw,'#ee8895',[0,.24,.43],[3.46,.16,.14]);
+ const cells=[];for(let i=0;i<12;i++)cells.push(ball(paw,'#ed7a85',[0,0,0],[.13,.085,.05]));
+ const drops=[],blues=[];
+ for(let i=0;i<5;i++){
+   const d=group(paw);ball(d,C.venom,[0,0,0],[.13,.15,.09]);cone(d,C.venom,[0,.15,0],.10,.23,6);drops.push(d);
+   for(let k=0;k<5;k++)blues.push({o:ball(paw,C.antibody,[0,0,0],[.043,.043,.043],true),i,k});
+ }
+ scenes.push({s:e.s,update(u,t){const p=u*8;
+   const isCut=p>=2.1&&p<5.8;
+   hero.root.position.set(p>5.8?mix(-.4,.65,smooth(5.8,8,p)):-.65,.06,.2);hero.pose(t,{walk:p<.7||p>5.8?1:0,look:p<2?.2:0});
+   sn.root.visible=p<5.8;sn.neck.position.x=-.35+smooth(.4,1.15,p)*.75*(1-smooth(1.3,1.9,p));
+   if(isCut){
+     cells.forEach((o,i)=>o.position.set(-1.5+((i*.31+(p-2.1)*.33)%3),.46+(i%3)*.22,.54));
+     drops.forEach((o,i)=>{o.position.set(-1.12+i*.56,.65+Math.sin(i*2)*.15,.62);o.scale.setScalar(1-smooth(3.6+i*.13,5.4+i*.06,p));});
+     blues.forEach(({o,i,k})=>{const a=t*3+k*Math.PI*2/5;const r=mix(.52,.17,smooth(2.2,4.8,p));o.position.set(drops[i].position.x+Math.cos(a)*r,drops[i].position.y+Math.sin(a)*r,.68);});
+     aim([1.6,4.7,8.7],[0,.83,.2]);return cut;
+   }
+   aim([5.8,4.9,11.5],[0,.7,.1]);return e.s;
+ }});
+}
+// 3. Defensive display. Teeth are individually modelled, never a texture.
+{
+ const e=environment(),hero=opossum(e.s),dog=quadruped(e.s);dog.root.rotation.y=Math.PI;dog.root.position.set(1.8,.06,.13);
+ const bursts=[];for(let i=0;i<3;i++){const g=group(e.s,[.93,1.2,.4]);const b=box(g,C.yellow,[0,0,0],[.07,.3,.05]);b.rotation.z=(i-1)*.5;bursts.push(g);}
+ scenes.push({s:e.s,update(u,t){const p=u*8;hero.root.position.set(-.75,.06,.25);hero.pose(t,{open:smooth(1.8,2.6,p)*(1-smooth(5.6,6.4,p)),look:0});
+  dog.root.position.x=1.7+smooth(5.3,8,p)*1.1;dog.root.position.y=.06+Math.max(0,Math.sin(t*12))*.05*(p<1.8?1:0);dog.head.rotation.z=Math.sin(t*13)*.08*(p<2?1:0);dog.mouth.scale.y=p<2?1+Math.sin(t*15)*.5:.35;
+  bursts.forEach((g,i)=>{g.position.set(.95+i*.16,1.4+(i-1)*.23,.45);g.visible=p<1.8&&Math.sin(t*13+i)>.2;});
+  dog.root.visible=!(p>=2.3&&p<5.5);
+  if(p>=2.3&&p<5.5)aim([4.2,2.45,5.8],[.42,1.17,.16]);else aim([5.8,4.7,11.4],[0,.85,0]);
+ }});
+}
+// 4. Playing dead; the cat's nose, disgust and retreat tell the action.
+{
+ const e=environment(),hero=opossum(e.s),cat=quadruped(e.s,'cat');cat.root.rotation.y=Math.PI;cat.root.scale.setScalar(1.14);
+ const smell=group(e.s);const clouds=[];for(let i=0;i<7;i++)clouds.push(ball(smell,C.venom,[0,0,0],[.18,.17,.15]));
+ scenes.push({s:e.s,update(u,t){const p=u*8,fall=smooth(1.3,2.3,p),leave=smooth(5.4,7.8,p);hero.root.position.set(-.65,mix(.06,.6,fall),.35);hero.root.rotation.x=fall*Math.PI/2;hero.pose(t,{dead:fall,look:0});
+  cat.root.position.set(mix(1.6,3.2,leave),.06,.16);cat.root.rotation.y=Math.PI*(1-leave);cat.head.rotation.z=-.4*smooth(2.3,3.4,p)+.7*smooth(4.4,5.4,p);cat.head.rotation.x=Math.sin(t*12)*.12*smooth(4.2,4.8,p)*(1-leave);cat.mouth.scale.y=1+smooth(4.1,4.8,p)*1.3;
+  clouds.forEach((o,i)=>{const v=((p*.35+i*.14)%1),k=.5+v*.6;o.position.set(-1.3+Math.sin(i*3+t)*.16,.45+v*.65,.2+Math.cos(i)*.12);o.scale.set(.18*k,.17*k,.15*k);});fade(smell,smooth(2.1,3,p)*.47*(1-smooth(6.7,7.8,p)));
+  aim([5.4,5.5,10.8],[.05,.65,.15]);
+ }});
+}
+// 5. Maternal cutaway: an overview establishes the tiny scale, then a warm macro.
+{
+ const e=environment({plain:true}),mother=opossum(e.s,1.1);mother.root.position.set(-.3,.56,0);mother.root.rotation.x=Math.PI/2;
+ const newborns=[];for(let i=0;i<13;i++)newborns.push(baby(e.s,.045));
+ const cut=lightScene();cut.background=new THREE.Color('#76534b');const bed=group(cut);
+ const base=cyl(bed,C.soil,[0,-.42,0],3.2,.7,12);base.scale.z=.83;cyl(bed,C.grass,[0,-.04,0],3.23,.1,12).scale.z=.83;
+ ball(bed,C.fur,[0,.28,0],[2.2,.48,1.6]);ball(bed,'#f3b5b0',[0,.64,0],[1.72,.19,1.2]);
+ // A lifted pouch lip reveals exactly thirteen attachment points in one row.
+ ball(bed,C.fur,[0,.61,-1.04],[1.83,.27,.28]);ball(bed,C.tail,[0,.64,-.86],[1.65,.13,.11]);
+ const teats=[],macroBabies=[];
+ for(let i=0;i<13;i++){
+  const x=-1.38+i*.23;teats.push(ball(bed,'#df7c95',[x,.84,-.32],[.055,.09,.055]));
+  const b=baby(bed,.30);macroBabies.push(b);
+ }
+ const warm=new THREE.PointLight('#ffd39c',12,8);warm.position.set(0,4,2);cut.add(warm);
+ scenes.push({s:e.s,update(u,t){const p=u*8;mother.pose(t,{dead:.6});
+  newborns.forEach((b,i)=>{const v=smooth(.2+i*.07,2.6+i*.04,p);b.position.set(-1.8+v*1.5+i*.019,.22+v*.67,.45-i*.055);b.rotation.z=Math.sin(t*9+i)*.12;});
+  if(p<2.6){aim([3.5,8.5,7.6],[0,.45,0]);return e.s;}
+  macroBabies.forEach((b,i)=>{const v=smooth(2.8+i*.09,5.4+i*.09,p);b.position.set(-1.38+i*.23,.85,mix(.72+(i%3)*.14,-.12,v));b.rotation.y=Math.PI/2;b.rotation.z=Math.sin(t*10+i)*.065*(1-v);});
+  aim([.1,9.2,3.4],[0,.5,.05]);return cut;
+ }});
+}
+// 6. Tree climb, an opposable hind toe, and a leaf-carrying prehensile tail.
+{
+ const e=environment({tree:true}),mother=opossum(e.s,.71),kids=[];
+ for(let i=0;i<6;i++){const b=baby(mother.body,.24);b.position.set(-.48+(i%3)*.34,1.22+Math.floor(i/3)*.1,-.19+Math.floor(i/3)*.31);kids.push(b);}
+ const grip=group(e.s,[-.1,1.8,.38]);rod(grip,[-1.1,0,0],[.4,0,0],.12,'#805742');rod(grip,[.4,0,0],[.8,.25,-.93],.12,'#805742');
+ const paw=group(grip,[.08,.15,.03]);ball(paw,C.fur,[0,.35,0],[.25,.45,.22]);ball(paw,C.tail,[0,.05,.1],[.24,.13,.21]);
+ for(let i=0;i<4;i++)chain(paw,[[-.17+i*.1,.02,.1],[-.17+i*.1,-.12,.15],[-.17+i*.1,-.17,-.04]],.042,C.tail);
+ chain(paw,[[-.24,.13,.05],[-.38,.02,-.03],[-.28,-.14,-.07],[-.13,-.16,-.04]],.065,C.tail);
+ const tailInsert=group(e.s);
+ chain(tailInsert,[[-1.35,2.6,.35],[-1.05,2.63,.35],[-.65,2.7,.35],[-.2,2.75,.35],[.03,2.61,.35],[-.1,2.44,.4],[-.39,2.47,.44],[-.5,2.67,.44],[-.3,2.83,.42],[.03,2.79,.42],[.13,2.58,.42]],.065,C.tail);
+ const bundle=group(tailInsert,[-.21,2.6,.4]);
+ for(let i=0;i<7;i++){const b=ball(bundle,i%2?'#c39757':'#d7b775',[Math.sin(i*2)*.17,i*.035,Math.cos(i*2)*.12],[.22,.035,.1]);b.rotation.y=i*.7;}
+ scenes.push({s:e.s,update(u,t){const p=u*8;
+  mother.root.position.set(.34,.3+smooth(0,3.1,p)*1.35,.03);mother.root.rotation.z=Math.PI/2;mother.pose(t,{walk:1,tailMode:1});
+  grip.visible=p>=3.1&&p<5.5;
+  // The cut-in is framed on an isolated branch; its far end joins the tree trunk.
+  mother.root.visible=p<3.1;tailInsert.visible=p>=5.5;bundle.visible=p>=5.5;
+  tailInsert.position.set(smooth(5.5,7.6,p)*.7,smooth(5.5,7.6,p)*.17,-smooth(5.5,7.6,p)*.45);
+  e.tree.children.slice(-8).forEach(o=>o.visible=p<3.1);
+  if(grip.visible){aim([2.6,3.5,5.4],[.1,2.02,.42]);}
+  else if(p>=5.5){aim([3.7,4.0,6.5],[.1,2.65,.15]);}
+  else aim([5.5,4.8,9.8],[0,1.65,0]);
+ }});
+}
+// 7. Fallen fruit, a beetle and a snail disappear into the mouth in sequence.
+{
+ const e=environment(),hero=opossum(e.s,.82),food=[];
+ const fruit=group(e.s,[.1,.11,.75]);ball(fruit,'#eea44d',[0,.15,0],[.22,.22,.23]);rod(fruit,[0,.31,0],[.04,.44,0],.025,'#735242');ball(fruit,C.plant,[.12,.39,0],[.13,.03,.06]);food.push(fruit);
+ const beetle=group(e.s,[.85,.11,.75]);ball(beetle,'#435d61',[0,.09,0],[.17,.1,.12]);ball(beetle,'#223c4a',[.15,.07,0],[.08,.07,.08]);
+ for(let i=0;i<3;i++)for(const z of [-1,1])rod(beetle,[-.1+i*.09,.05,0],[-.12+i*.1,.01,z*.2],.014,'#263941');food.push(beetle);
+ const snail=group(e.s,[1.6,.11,.75]);ball(snail,'#d5bc87',[0,.04,0],[.22,.055,.11]);ball(snail,'#c78f65',[-.03,.18,0],[.16,.17,.14]);
+ for(let i=0;i<9;i++){const a=i*.8;ball(snail,'#845c52',[-.03+Math.cos(a)*(.11-i*.009),.18+Math.sin(a)*(.11-i*.009),.13],[.025,.025,.018]);}
+ for(const z of [-.055,.055]){rod(snail,[.15,.05,z],[.24,.19,z],.012,'#d5bc87');ball(snail,C.eye,[.24,.19,z],[.02,.02,.02]);}food.push(snail);
+ const sparkles=[];for(let i=0;i<15;i++)sparkles.push(sparkle(e.s,-1.8+i*.23,.15+(i%3)*.13,.7+Math.sin(i*2)*.5));
+ const scraps=[];for(let i=0;i<14;i++)scraps.push(ball(e.s,'#9b785c',[-1.6+i*.24,.11,.45+(i%3)*.3],[.055,.025,.04]));
+ scenes.push({s:e.s,update(u,t){const p=u*8;const x=mix(-1.35,.83,smooth(0,6.6,p));hero.root.position.set(x,.06,.78);
+  const eating=[1.6,3.4,5.4].reduce((v,a)=>Math.max(v,smooth(a-.4,a,p)*(1-smooth(a+.3,a+.7,p))),0);
+  hero.pose(t,{walk:1-eating,open:eating*.4});hero.head.rotation.z=-eating*.32;
+  food.forEach((g,i)=>{const at=[1.6,3.4,5.4][i];g.scale.setScalar(1-smooth(at,at+.4,p));g.position.y=.11+Math.sin(smooth(at,at+.4,p)*Math.PI)*.14;});
+  scraps.forEach((g,i)=>g.visible=g.position.x>x+.4);sparkles.forEach((g,i)=>{g.visible=g.position.x<x+.2;g.scale.setScalar(.5+Math.sin(t*4+i)*.28);g.rotation.y=t*.3;});
+  aim([5.2,5.1,10.8],[.1,.65,.45]);
+ }});
+}
+function stoneFigure(parent,x,z,scale=1) {
+ const g=group(parent,[x,0,z]);g.scale.setScalar(scale);
+ box(g,C.stone,[0,.47,0],[.62,.84,.52]);box(g,'#aaa39e',[0,1.15,0],[.75,.65,.65]);box(g,'#7a7378',[0,1.52,0],[.9,.13,.78]);
+ for(const dx of [-.18,.18])box(g,'#4f4d59',[dx,1.22,.337],[.13,.1,.02]);box(g,'#77747d',[0,1.05,.38],[.12,.22,.12]);box(g,'#55505a',[0,.89,.34],[.28,.055,.025]);
+ for(const dx of [-.4,.4])box(g,C.stone,[dx,.53,0],[.18,.54,.27]);return g;
+}
+function fire(parent) {
+ const g=group(parent);for(let i=0;i<5;i++){const a=i*Math.PI/5;rod(g,[-Math.cos(a)*.48,.12,-Math.sin(a)*.48],[Math.cos(a)*.48,.12,Math.sin(a)*.48],.08,'#6c473b');}
+ const flames=[];for(let i=0;i<8;i++){const c=cone(g,i%2?C.fire:C.yellow,[Math.sin(i*2)*.22,.43,Math.cos(i*2)*.18],.17,.65+(i%3)*.15,6);c.material=mat(i%2?C.fire:C.yellow,true);flames.push(c);}
+ const light=new THREE.PointLight(C.fire,18,7,2);light.position.y=.8;g.add(light);return {root:g,flames,light};
+}
+// 8. A wordless toy retelling of the fire-bringing legend.
+{
+ const e=environment({legend:true}),hero=opossum(e.s,.83);
+ ball(e.s,'#e8a471',[-2.3,4.35,-5],[.68,.68,.3],true);
+ for(let i=0;i<3;i++)stoneFigure(e.s,-1.8+i*1.8,-1.5,.78+(i%2)*.15);
+ for(let i=0;i<3;i++)box(e.s,'#9d7969',[0,.16+i*.17,-2.05],[2.8-i*.55,.18,1.05-i*.17]);
+ const people=[];
+ for(let i=0;i<5;i++){
+  const a=-Math.PI*.1+i*Math.PI*.32,x=Math.cos(a)*1.25,z=Math.sin(a)*.85-.1;
+  const g=group(e.s,[x,0,z]);cyl(g,['#d7a078','#c17f64','#e1b591'][i%3],[0,.43,0],.18,.63,7);ball(g,'#b97957',[0,.91,0],[.2,.23,.19]);
+  ball(g,'#413137',[0,1.04,-.025],[.21,.13,.18]);for(const dx of [-.11,.11])ball(g,'#835b4b',[dx,.09,.03],[.1,.1,.16]);
+  for(const dx of [-.065,.065])ball(g,C.eye,[dx,.94,.17],[.025,.035,.015]);
+  rod(g,[-.2,.56,0],[-.33,.43,.15],.06,'#c68d6c');rod(g,[.2,.56,0],[.33,.43,.15],.06,'#c68d6c');people.push(g);
+ }
+ const camp=fire(e.s);camp.root.position.set(-.15,.05,.67);
+ const ember=group(e.s);ball(ember,C.ember,[0,0,0],[.13,.1,.11],true);const ef=cone(ember,C.fire,[0,.17,0],.08,.26,6);ef.material=mat(C.fire,true);
+ const eLight=new THREE.PointLight(C.fire,5,3);ember.add(eLight);
+ const fuzz=[];for(let i=0;i<12;i++)fuzz.push(rod(hero.tail,[-.15-i*.09,.05,0],[-.15-i*.09,.16,.04],.017,C.fur));
+ const ash=[];for(let i=0;i<12;i++)ash.push(ball(e.s,'#ecc890',[0,0,0],[.022,.022,.022]));
+ const smile=group(hero.head,[.61,-.13,.203]);for(let i=0;i<6;i++)ball(smile,'#724951',[-.15+i*.052,-.035*Math.sin(i*Math.PI/5),0],[.029,.012,.01]);
+ scenes.push({s:e.s,update(u,t){const p=u*10,deliver=smooth(3.5,6.1,p),end=smooth(8,9.5,p);
+  hero.root.position.set(mix(-.15,-.9,deliver),.06,1.32);hero.root.rotation.y=mix(-.15,-.45,end);hero.pose(t,{walk:p<3.5?.6:0,tailMode:2,look:-.05-end*.2});
+  hero.root.updateMatrixWorld(true);const tip=hero.tailParts[15].getWorldPosition(new THREE.Vector3());ember.position.copy(tip).lerp(V(-.15,.32,.67),deliver);ember.visible=p<6.15;
+  // Bend the connected tail with the ember, so the coal never travels unsupported.
+  const held=hero.tail.worldToLocal(ember.position.clone());
+  const original=V(-1.3,Math.sin(5)*.4,(Math.cos(5)-1)*.36);
+  const delta=held.sub(original).multiplyScalar(1-smooth(6.3,8,p));
+  const points=Array.from({length:17},(_,i)=>{const q=i/16;return V(-q*1.3,Math.sin(q*5)*.4,(Math.cos(q*5)-1)*.36).addScaledVector(delta,q*q);});
+  hero.tailParts.forEach((o,i)=>{const d=points[i+1].clone().sub(points[i]);o.position.copy(points[i]).add(points[i+1]).multiplyScalar(.5);o.scale.y=d.length()/.15;o.quaternion.setFromUnitVectors(V(0,1,0),d.normalize());});
+  fuzz.forEach((o,i)=>o.visible=p<1.2+i*.1);ash.forEach((o,i)=>{const v=((p*.6+i*.11)%1);o.visible=p>1.2&&p<4;o.position.copy(tip).add(V(Math.sin(i*5+p)*.16,v*.8,.07));o.scale.setScalar(.022*(1-v));});
+  camp.root.visible=p>5.5;camp.flames.forEach((o,i)=>{const h=smooth(5.5,6.7,p);o.scale.set(h,h*(.8+Math.sin(t*7+i)*.18),h);});camp.light.intensity=18*smooth(5.5,6.7,p);
+  people.forEach((o,i)=>{o.position.y=p>6?Math.max(0,Math.sin(t*4+i))*.035:0;});
+  smile.visible=p>8;
+  if(p>8)aim([mix(4.8,2.9,end),mix(5.3,2.7,end),mix(12.1,6.9,end)],[mix(0,-.2,end),mix(.85,1.03,end),mix(.2,1.32,end)]);
+  else aim([4.8,5.3,12.1],[0,.85,.2]);
+ }});
+}
+window.render = function render(t) {
+ if(!Number.isFinite(t))throw new TypeError('render(t) requires finite seconds');
+ const {index,progress}=sceneAt(clamp(t,0,DURATION));
+ const shot=scenes[index];const override=shot.update(progress,t);
+ renderer.render(override||shot.s,camera);
+ return {scene:index,time:t,drawCalls:renderer.info.render.calls};
+};
+window.videoConfig={...CONFIG,duration:DURATION};
+window.render(0);
+window.ready=true;
+</script>
