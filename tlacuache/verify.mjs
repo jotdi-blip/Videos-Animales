@@ -1,0 +1,17 @@
+import { execFileSync } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { writeFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
+import { CONFIG, DURATION } from './config.js';
+const root=dirname(fileURLToPath(import.meta.url));
+const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-count_frames','-show_streams','-show_format','-of','json',resolve(root,'output/tlacuache.mp4')],{encoding:'utf8'}));
+assert.equal(probe.streams.length,1,'Exactly one stream; no audio or subtitles');
+const v=probe.streams[0];
+assert.equal(v.codec_type,'video');assert.equal(v.codec_name,'h264');
+assert.equal(v.width,CONFIG.width);assert.equal(v.height,CONFIG.height);
+assert.equal(v.pix_fmt,'yuv420p');assert.equal(v.r_frame_rate,`${CONFIG.fps}/1`);
+assert.equal(Number(v.nb_read_frames),Math.round(DURATION*CONFIG.fps));
+assert.ok(Math.abs(Number(probe.format.duration)-DURATION)<.01);
+writeFileSync(resolve(root,'output/verification.json'),JSON.stringify({passed:true,width:v.width,height:v.height,fps:v.r_frame_rate,duration:Number(probe.format.duration),frames:Number(v.nb_read_frames),streams:probe.streams.map(s=>s.codec_type),codec:v.codec_name},null,2));
+console.log(`Verified: ${v.width}x${v.height}, ${CONFIG.fps} fps, ${DURATION} s, ${v.nb_read_frames} frames; one H.264 video stream, no audio/subtitles.`);

@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "width": 720,
+  "height": 1280,
+  "fps": "30/1",
+  "duration": 66,
+  "frames": 1980,
+  "streams": [
+    "video"
+  ],
+  "codec": "h264"
+}

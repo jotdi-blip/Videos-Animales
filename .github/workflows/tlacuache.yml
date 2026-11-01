@@ -1,0 +1,58 @@
+name: Render tlacuache
+on:
+  push:
+    branches: [main]
+    paths: ['tlacuache/**', '.github/workflows/tlacuache.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: tlacuache-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: tlacuache
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tlacuache/package-lock.json
+      - name: Install ffmpeg, npm dependencies and Chrome
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+          npm ci
+          npx puppeteer browsers install chrome --install-deps
+      - name: Render deterministic PNG frames and silent MP4
+        run: npm run render
+      - name: Verify video format and absence of audio and subtitle tracks
+        run: npm run verify
+      - name: Upload video and scene review
+        uses: actions/upload-artifact@v4
+        with:
+          name: tlacuache-720x1280-30fps
+          path: |
+            tlacuache/output/tlacuache.mp4
+            tlacuache/output/verification.json
+            tlacuache/output/review/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Commit only this project's rendered video
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add output/tlacuache.mp4 output/verification.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Render tlacuache video [skip ci]'
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
