@@ -23,3 +23,9 @@ Requiere Node 22+, Chrome de Puppeteer y ffmpeg. `npm ci`, `node render.mjs --ch
 La respiración cloacal intercambia gases con el agua a través de bursas irrigadas: no reemplaza los pulmones en todas las tortugas. El valor cercano a dos tercios para *Rheodytes leukops* es aproximado y depende de las condiciones. La supervivencia invernal de otras especies también depende del metabolismo reducido y la tolerancia a la anoxia; no debe atribuirse solo a las bursas. Los dibujos son esquemas, sin escala anatómica.
 
 Referencias: [Australian Museum: Fitzroy River Turtle](https://australian.museum/learn/animals/reptiles/fitzroy-river-turtle/); [Jackson, 2002: Hibernating without oxygen](https://doi.org/10.1242/jeb.205.23.3579).
+
+## Skill de shorts animados 3D
+
+Skill incluida en [`.agents/skills/shorts-animados-3d/`](.agents/skills/shorts-animados-3d/SKILL.md), con las plantillas, ejemplos, referencias y licencia del paquete original. Ofrece animación realista con Blender o caricatura con Three.js y Remotion.
+
+Para usarla en Codex, abre este repositorio y pide: «Usa la skill shorts-animados-3d». Consulta su [guía de instalación y requisitos](.agents/skills/shorts-animados-3d/README.md). Agregar la skill no instala Blender, Remotion ni servicios de voz.
